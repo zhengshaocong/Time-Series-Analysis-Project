@@ -1,0 +1,41 @@
+# Python cache/bytecode
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# Jupyter/IPython checkpoints
+.ipynb_checkpoints/
+
+# VSCode/IDE/PyCharm等编辑器配置
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# Mac系统文件
+.DS_Store
+
+# 虚拟环境
+venv/
+.env/
+ENV/
+.venv/
+
+# 数据/输出/缓存/临时文件
+output/
+cache/
+data/
+*.log
+*.tmp
+*.bak
+
+# 安装包/依赖
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# 项目自定义忽略
+# 可根据实际需要补充 
