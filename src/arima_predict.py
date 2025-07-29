@@ -130,7 +130,7 @@ def generate_new_params(ts_train):
     try:
         from utils.arima_grid_search import arima_grid_search
         print("🔍 开始ARIMA参数网格搜索...")
-        adf_test(ts_train, title='2014年3月至8月申购金额训练集')
+        print("💡 建议：在进行ARIMA建模前，建议先使用'数据平稳性检验'功能检查数据平稳性")
         data_length = len(ts_train)
         max_params = min(10, int(data_length * 0.05))
         best_params, best_model = arima_grid_search(

@@ -733,51 +733,50 @@ class CacheManager:
     
     def get_cache_summary(self, data_file_path):
         """
-        获取缓存摘要信息（用于显示在菜单中）
-        
-        生成简洁的缓存摘要，用于在菜单中显示。
+        获取缓存摘要信息
         
         参数：
-            data_file_path: str 或 Path
-                数据文件路径
-        
+            data_file_path: str - 数据文件路径
+            
         返回：
-            str: 摘要字符串，格式如：
-                "📋 ARIMA(2,1,3) (AIC:1234.5, 参数:6, 2.1%)"
-            None: 如果没有缓存则返回None
-        
-        示例：
-            >>> summary = self.get_cache_summary("data.csv")
-            >>> if summary:
-            >>>     print(f"缓存摘要: {summary}")
-        
-        注意事项：
-            1. 先刷新缓存确保最新信息
-            2. 包含安全检查避免KeyError
-            3. 格式化输出便于显示
-            4. 包含参数比例信息
+            str: 缓存摘要信息，如果没有缓存则返回空字符串
         """
-        # 先刷新缓存，确保获取最新信息
-        self.refresh_cache()
+        cache_key = self.get_cache_key(data_file_path)
+        if cache_key in self.cache_data:
+            cached_info = self.cache_data[cache_key]
+            if 'best_params' in cached_info:
+                return f"📋 ARIMA{cached_info['best_params']}"
+        return ""
+    
+    def save_stationarity_cache(self, data_file_path, cache_data):
+        """
+        保存平稳性检验缓存
         
-        cached_info = self.get_cached_params(data_file_path)
-        if cached_info is None:
-            return None
+        参数：
+            data_file_path: str - 数据文件路径
+            cache_data: dict - 缓存数据，包含检验结果等信息
+        """
+        cache_key = self.get_cache_key(data_file_path)
+        if cache_key not in self.cache_data:
+            self.cache_data[cache_key] = {}
         
-        # 安全检查：确保缓存信息包含必要的字段
-        if not isinstance(cached_info, dict):
-            return None
+        self.cache_data[cache_key]['stationarity'] = cache_data
+        self._save_cache()
+    
+    def get_stationarity_cache(self, data_file_path):
+        """
+        获取平稳性检验缓存
         
-        # 检查是否包含ARIMA参数信息
-        if 'best_params' not in cached_info or 'best_aic' not in cached_info:
-            return None
-        
-        params = cached_info['best_params']
-        aic = cached_info['best_aic']
-        total_params = cached_info.get('total_params', 0)
-        param_ratio = cached_info.get('param_ratio', 0)
-        
-        return f"📋 ARIMA{params} (AIC:{aic:.1f}, 参数:{total_params}, {param_ratio}%)"
+        参数：
+            data_file_path: str - 数据文件路径
+            
+        返回：
+            dict: 平稳性检验缓存数据，如果没有则返回None
+        """
+        cache_key = self.get_cache_key(data_file_path)
+        if cache_key in self.cache_data:
+            return self.cache_data[cache_key].get('stationarity')
+        return None
 
 # 全局缓存管理器实例
 cache_manager = CacheManager() 

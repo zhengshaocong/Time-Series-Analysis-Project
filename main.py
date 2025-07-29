@@ -10,6 +10,7 @@ from src.plot_trend import plot_trend
 from src.arima_param_search import arima_param_search
 from src.arima_predict import arima_predict
 from src.csv_export import handle_csv_export_with_cache
+from src.stationarity_test import stationarity_test
 from src.other_functions import run_all, show_help, exit_program, manage_cache, show_config, handle_plot_with_cache, handle_predict_with_cache
 from utils.menu_control import (
     show_interactive_menu, show_simple_menu, clear_screen,
@@ -31,6 +32,8 @@ def get_program_func(program_id):
         return handle_predict_with_cache
     elif program_id == 'csv-export':
         return handle_csv_export_with_cache
+    elif program_id == 'stationarity-test':
+        return stationarity_test
     else:
         return None
 
@@ -101,6 +104,10 @@ def main():
             func = get_program_func(program_ids[selected])
             if func:
                 func()
+                # 功能执行完成后，让用户查看结果
+                print(f"\n{'='*40}")
+                print("💡 功能执行完成，请查看上方结果")
+                input("按回车键继续...")
             else:
                 print(f"❌ 未找到功能: {program_names[selected]}")
         elif selected == len(program_names):

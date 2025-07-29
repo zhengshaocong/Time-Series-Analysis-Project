@@ -35,6 +35,14 @@ PROGRAMS_CONFIG = {
     # 可运行的程序列表
     'programs': [
         {
+            'id': 'stationarity-test',
+            'name': '📈 数据平稳性检验',
+            'description': '检验时间序列数据的平稳性，包括ADF、KPSS、PP检验',
+            'script': 'src/stationarity_test.py',
+            'output': 'output/images/stationarity_diagnostic.png',
+            'enabled': True
+        },
+        {
             'id': 'plot',
             'name': '📈 绘制资金流入流出趋势图',
             'description': '分析用户申购和赎回金额的时间趋势',
