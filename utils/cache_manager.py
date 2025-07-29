@@ -136,16 +136,20 @@ class CacheManager:
         except IOError:
             return None
     
-    def get_cache_key(self, data_file_path):
+    def get_cache_key(self, data_file_path, series_type=None):
         """
         根据数据文件路径生成缓存键
         
-        缓存键格式：文件名_文件哈希前8位
-        例如：user_balance_table.csv_a1b2c3d4
+        缓存键格式：
+        - 基础格式：文件名_文件哈希前8位
+        - 带序列类型：文件名_文件哈希前8位_序列类型
+        例如：user_balance_table.csv_a1b2c3d4 或 user_balance_table.csv_a1b2c3d4_purchase
         
         参数：
             data_file_path: str 或 Path
                 数据文件路径
+            series_type: str, 可选
+                序列类型 ('purchase' 或 'redeem')
         
         返回：
             str: 缓存键
@@ -153,12 +157,15 @@ class CacheManager:
         
         示例：
             >>> key = self.get_cache_key("data/user_balance_table.csv")
-            >>> print(f"缓存键: {key}")
+            >>> print(f"基础缓存键: {key}")
+            >>> key = self.get_cache_key("data/user_balance_table.csv", "purchase")
+            >>> print(f"申购缓存键: {key}")
         
         注意事项：
             1. 检查文件是否存在
             2. 计算文件MD5哈希值
             3. 使用文件名和哈希前8位组合
+            4. 如果指定序列类型，则添加到缓存键中
         """
         file_path = Path(data_file_path)
         if not file_path.exists():
@@ -168,18 +175,26 @@ class CacheManager:
         if file_hash is None:
             return None
         
-        # 使用文件名和哈希值作为缓存键
-        return f"{file_path.name}_{file_hash[:8]}"
+        # 基础缓存键
+        base_key = f"{file_path.name}_{file_hash[:8]}"
+        
+        # 如果指定了序列类型，则添加到缓存键中
+        if series_type:
+            return f"{base_key}_{series_type}"
+        
+        return base_key
     
-    def get_cached_params(self, data_file_path):
+    def get_cached_params(self, data_file_path, series_type='purchase'):
         """
         获取缓存的ARIMA参数
         
-        根据数据文件路径获取对应的ARIMA参数缓存。
+        根据数据文件路径和序列类型获取对应的ARIMA参数缓存。
         
         参数：
             data_file_path: str 或 Path
                 数据文件路径
+            series_type: str
+                序列类型 ('purchase' 或 'redeem')
         
         返回：
             dict: 缓存的参数信息，包含：
@@ -190,22 +205,45 @@ class CacheManager:
                 - param_ratio: 参数比例
                 - timestamp: 缓存时间
                 - data_file: 数据文件路径
+                - series_type: 序列类型
                 - images: 图片缓存信息（如果有）
             None: 如果没有缓存则返回None
         
         示例：
-            >>> cached_info = self.get_cached_params("data.csv")
+            >>> cached_info = self.get_cached_params("data.csv", "purchase")
             >>> if cached_info:
-            >>>     print(f"最优参数: ARIMA{cached_info['best_params']}")
+            >>>     print(f"申购最优参数: ARIMA{cached_info['best_params']}")
             >>>     print(f"AIC: {cached_info['best_aic']}")
         """
-        cache_key = self.get_cache_key(data_file_path)
+        # 使用带序列类型的缓存键
+        cache_key = self.get_cache_key(data_file_path, series_type)
         if cache_key is None:
             return None
         
-        return self.cache_data.get(cache_key)
+        cache_data = self.cache_data.get(cache_key, {})
+        
+        # 如果找到了对应的缓存数据，直接返回
+        if cache_data and 'best_params' in cache_data:
+            return cache_data
+        
+        # 兼容旧格式：尝试使用基础缓存键
+        base_cache_key = self.get_cache_key(data_file_path)
+        if base_cache_key is None:
+            return None
+        
+        base_cache_data = self.cache_data.get(base_cache_key, {})
+        
+        # 如果基础缓存中没有series_type字段，说明是旧格式，返回整个缓存
+        if 'series_type' not in base_cache_data:
+            return base_cache_data
+        
+        # 新格式：根据series_type返回对应的参数
+        if base_cache_data.get('series_type') == series_type:
+            return base_cache_data
+        
+        return None
     
-    def save_params(self, data_file_path, best_params, best_aic, total_params, data_length):
+    def save_params(self, data_file_path, best_params, best_aic, total_params, data_length, series_type='purchase'):
         """
         保存ARIMA参数到缓存
         
@@ -214,6 +252,7 @@ class CacheManager:
         2. AIC值
         3. 参数统计信息
         4. 时间戳
+        5. 序列类型
         
         参数：
             data_file_path: str 或 Path
@@ -226,6 +265,8 @@ class CacheManager:
                 参数个数 (p + q + 1)
             data_length: int
                 数据长度
+            series_type: str
+                序列类型 ('purchase' 或 'redeem')
         
         示例：
             >>> self.save_params(
@@ -233,17 +274,21 @@ class CacheManager:
             >>>     (2, 1, 3),
             >>>     1234.56,
             >>>     6,
-            >>>     184
+            >>>     184,
+            >>>     "purchase"
             >>> )
-            >>> print("参数已缓存")
+            >>> print("申购参数已缓存")
         
         注意事项：
             1. 自动计算参数比例
             2. 记录当前时间戳
             3. 保存完整的数据文件路径
-            4. 如果缓存键生成失败会跳过保存
+            4. 记录序列类型
+            5. 如果缓存键生成失败会跳过保存
+            6. 申购和赎回参数使用不同的缓存键，避免相互覆盖
         """
-        cache_key = self.get_cache_key(data_file_path)
+        # 使用带序列类型的缓存键
+        cache_key = self.get_cache_key(data_file_path, series_type)
         if cache_key is None:
             print("❌ 无法生成缓存键，跳过缓存")
             return
@@ -255,12 +300,23 @@ class CacheManager:
             'data_length': data_length,
             'param_ratio': round(total_params / data_length * 100, 2),
             'timestamp': datetime.now().isoformat(),
-            'data_file': str(data_file_path)
+            'data_file': str(data_file_path),
+            'series_type': series_type
         }
+        
+        # 如果缓存键已存在，保留其他信息（如图片缓存）
+        if cache_key in self.cache_data:
+            existing_cache = self.cache_data[cache_key]
+            # 保留图片缓存信息
+            if 'images' in existing_cache:
+                cache_info['images'] = existing_cache['images']
+            # 保留CSV缓存信息
+            if 'csv_files' in existing_cache:
+                cache_info['csv_files'] = existing_cache['csv_files']
         
         self.cache_data[cache_key] = cache_info
         self._save_cache()
-        print(f"✅ 参数已缓存: {cache_key}")
+        print(f"✅ {series_type}参数已缓存: {cache_key}")
     
     def save_image_cache(self, data_file_path, image_type, image_path, description=""):
         """
@@ -570,7 +626,7 @@ class CacheManager:
         
         return cache_info['csv_files']
     
-    def clear_cache(self, data_file_path=None):
+    def clear_cache(self, data_file_path=None, series_type=None):
         """
         清除缓存
         
@@ -579,18 +635,24 @@ class CacheManager:
         参数：
             data_file_path: str 或 Path, 默认 None
                 指定文件路径，如果为None则清除所有缓存
+            series_type: str, 可选
+                序列类型 ('purchase' 或 'redeem')，如果指定则只清除该序列的缓存
         
         示例：
             >>> # 清除指定文件的缓存
             >>> self.clear_cache("data.csv")
+            >>> 
+            >>> # 清除指定文件申购序列的缓存
+            >>> self.clear_cache("data.csv", "purchase")
             >>> 
             >>> # 清除所有缓存
             >>> self.clear_cache()
         
         注意事项：
             1. 清除指定文件缓存时会验证缓存键
-            2. 清除所有缓存会清空整个缓存字典
-            3. 操作完成后会自动保存缓存文件
+            2. 如果指定序列类型，只清除该序列的缓存
+            3. 清除所有缓存会清空整个缓存字典
+            4. 操作完成后会自动保存缓存文件
         """
         if data_file_path is None:
             # 清除所有缓存
@@ -598,12 +660,30 @@ class CacheManager:
             print("🗑️  已清除所有缓存")
         else:
             # 清除指定文件的缓存
-            cache_key = self.get_cache_key(data_file_path)
-            if cache_key and cache_key in self.cache_data:
-                del self.cache_data[cache_key]
-                print(f"🗑️  已清除缓存: {cache_key}")
+            if series_type:
+                # 清除特定序列的缓存
+                cache_key = self.get_cache_key(data_file_path, series_type)
+                if cache_key and cache_key in self.cache_data:
+                    del self.cache_data[cache_key]
+                    print(f"🗑️  已清除{series_type}缓存: {cache_key}")
+                else:
+                    print(f"ℹ️  未找到{series_type}的缓存记录")
             else:
-                print("ℹ️  未找到对应的缓存记录")
+                # 清除所有相关缓存（包括基础缓存和序列特定缓存）
+                base_cache_key = self.get_cache_key(data_file_path)
+                purchase_cache_key = self.get_cache_key(data_file_path, 'purchase')
+                redeem_cache_key = self.get_cache_key(data_file_path, 'redeem')
+                
+                cleared_count = 0
+                for key in [base_cache_key, purchase_cache_key, redeem_cache_key]:
+                    if key and key in self.cache_data:
+                        del self.cache_data[key]
+                        cleared_count += 1
+                
+                if cleared_count > 0:
+                    print(f"🗑️  已清除{cleared_count}个缓存记录")
+                else:
+                    print("ℹ️  未找到对应的缓存记录")
         
         self._save_cache()
     
@@ -680,7 +760,7 @@ class CacheManager:
                             print(f"  - {csv_type}: {csv_info.get('path', 'Unknown')}")
                     print("-" * 40)
     
-    def is_cache_valid(self, data_file_path):
+    def is_cache_valid(self, data_file_path, series_type=None):
         """
         检查缓存是否有效（文件是否被修改）
         
@@ -689,22 +769,25 @@ class CacheManager:
         参数：
             data_file_path: str 或 Path
                 数据文件路径
+            series_type: str, 可选
+                序列类型 ('purchase' 或 'redeem')
         
         返回：
             bool: 缓存是否有效
         
         示例：
-            >>> if self.is_cache_valid("data.csv"):
-            >>>     print("缓存有效，可以使用")
+            >>> if self.is_cache_valid("data.csv", "purchase"):
+            >>>     print("申购缓存有效，可以使用")
             >>> else:
-            >>>     print("缓存无效，需要重新计算")
+            >>>     print("申购缓存无效，需要重新计算")
         
         注意事项：
             1. 基于文件哈希值判断有效性
             2. 文件不存在时返回False
             3. 缓存键不存在时返回False
+            4. 如果指定序列类型，只检查该序列的缓存
         """
-        cache_key = self.get_cache_key(data_file_path)
+        cache_key = self.get_cache_key(data_file_path, series_type)
         if cache_key is None:
             return False
         
@@ -731,21 +814,23 @@ class CacheManager:
         self.cache_data = self._load_cache()
         return self.cache_data
     
-    def get_cache_summary(self, data_file_path):
+    def get_cache_summary(self, data_file_path, series_type=None):
         """
         获取缓存摘要信息
         
         参数：
             data_file_path: str - 数据文件路径
+            series_type: str, 可选 - 序列类型 ('purchase' 或 'redeem')
             
         返回：
             str: 缓存摘要信息，如果没有缓存则返回空字符串
         """
-        cache_key = self.get_cache_key(data_file_path)
+        cache_key = self.get_cache_key(data_file_path, series_type)
         if cache_key in self.cache_data:
             cached_info = self.cache_data[cache_key]
             if 'best_params' in cached_info:
-                return f"📋 ARIMA{cached_info['best_params']}"
+                series_label = f"({series_type})" if series_type else ""
+                return f"📋 ARIMA{cached_info['best_params']} {series_label}"
         return ""
     
     def save_stationarity_cache(self, data_file_path, cache_data):

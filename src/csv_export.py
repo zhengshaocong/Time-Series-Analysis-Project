@@ -138,7 +138,7 @@ def generate_csv_file(forecast_predict, predict_dates, arima_params):
     生成CSV文件
     
     参数:
-        forecast_predict: 预测结果
+        forecast_predict: 申购金额预测结果
         predict_dates: 预测日期
         arima_params: ARIMA参数
     
@@ -149,18 +149,19 @@ def generate_csv_file(forecast_predict, predict_dates, arima_params):
     output_dir = Path(CSV_CONFIG['output_dir'])
     output_dir.mkdir(parents=True, exist_ok=True)
     
+    # 预测赎回金额
+    print(f"\n📊 开始预测赎回金额...")
+    forecast_redeem = predict_redeem_amount(arima_params)
+    
     # 生成CSV数据
     csv_data = []
-    for i, (date, value) in enumerate(zip(predict_dates, forecast_predict)):
+    for i, (date, purchase_value, redeem_value) in enumerate(zip(predict_dates, forecast_predict, forecast_redeem)):
         # 格式化日期为YYYYMMDD格式
         date_str = date.strftime(CSV_CONFIG['format']['date_format'])
         
         # 格式化数值，保留指定小数位数
-        purchase_value = round(float(value), CSV_CONFIG['format']['decimal_places'])
-        
-        # 这里假设赎回金额为申购金额的某个比例（可以根据实际需求调整）
-        # 或者可以设置为0，表示只预测申购金额
-        redeem_value = 0.0  # 可以根据实际需求调整
+        purchase_value = round(float(purchase_value), CSV_CONFIG['format']['decimal_places'])
+        redeem_value = round(float(redeem_value), CSV_CONFIG['format']['decimal_places'])
         
         csv_data.append({
             'report_date': date_str,
@@ -185,8 +186,117 @@ def generate_csv_file(forecast_predict, predict_dates, arima_params):
     print(f"✅ CSV文件已保存: {csv_path}")
     print(f"📊 数据行数: {len(df)}")
     print(f"📋 列名: {', '.join(df.columns.tolist())}")
+    print(f"📈 申购金额统计: 均值={df['purchase'].mean():.2f}, 标准差={df['purchase'].std():.2f}")
+    print(f"📉 赎回金额统计: 均值={df['redeem'].mean():.2f}, 标准差={df['redeem'].std():.2f}")
     
     return str(csv_path)
+
+def predict_redeem_amount(arima_params):
+    """
+    预测赎回金额
+    
+    参数:
+        arima_params: ARIMA参数 (p, d, q)
+    
+    返回:
+        pd.Series: 赎回金额预测结果
+    """
+    try:
+        # 加载赎回金额数据
+        file_path = get_data_file_path()
+        df = pd.read_csv(file_path)
+        
+        # 确保report_date为字符串
+        if df['report_date'].dtype != 'O':
+            df['report_date'] = df['report_date'].astype(str)
+        
+        # 只保留2014年3月及以后的数据
+        df = df[df['report_date'] >= '20140301']
+        
+        # 按日期汇总赎回金额，并按时间排序
+        trend = df.groupby('report_date')['total_redeem_amt'].sum().reset_index()
+        trend = trend.sort_values('report_date')
+        
+        # 构造时间序列索引
+        dates = pd.to_datetime(trend['report_date'], format='%Y%m%d')
+        ts_redeem = pd.Series(trend['total_redeem_amt'].values, index=dates)
+        
+        # 训练集：2014年3月1日~2014年8月31日
+        ts_train_redeem = ts_redeem[(ts_redeem.index >= '2014-03-01') & (ts_redeem.index <= '2014-08-31')]
+        
+        # 预测区间：2014年9月1日~2014年12月31日
+        predict_dates = pd.date_range('2014-09-01', '2014-12-31')
+        steps = (predict_dates[0] - ts_train_redeem.index[-1]).days + len(predict_dates)
+        
+        # 使用同样的ARIMA参数对赎回金额建模
+        from statsmodels.tsa.arima.model import ARIMA
+        model_redeem = ARIMA(ts_train_redeem, order=arima_params)
+        model_fit_redeem = model_redeem.fit()
+        forecast_redeem = model_fit_redeem.forecast(steps=steps)
+        forecast_redeem_predict = forecast_redeem[-len(predict_dates):]
+        
+        print(f"✅ 赎回金额预测完成，预测步数: {steps}")
+        print(f"📊 赎回金额预测区间: {predict_dates[0].strftime('%Y-%m-%d')} 至 {predict_dates[-1].strftime('%Y-%m-%d')}")
+        
+        return forecast_redeem_predict
+        
+    except Exception as e:
+        print(f"❌ 赎回金额预测失败: {e}")
+        print("💡 使用历史平均比例估算赎回金额...")
+        
+        # 如果预测失败，使用历史数据的赎回/申购比例来估算
+        return estimate_redeem_by_ratio(arima_params)
+
+def estimate_redeem_by_ratio(arima_params):
+    """
+    使用历史赎回/申购比例估算赎回金额
+    
+    参数:
+        arima_params: ARIMA参数
+    
+    返回:
+        pd.Series: 估算的赎回金额
+    """
+    try:
+        # 加载历史数据计算比例
+        file_path = get_data_file_path()
+        df = pd.read_csv(file_path)
+        
+        if df['report_date'].dtype != 'O':
+            df['report_date'] = df['report_date'].astype(str)
+        
+        # 只保留2014年3月及以后的数据
+        df = df[df['report_date'] >= '20140301']
+        
+        # 按日期汇总
+        trend = df.groupby('report_date')[['total_purchase_amt', 'total_redeem_amt']].sum().reset_index()
+        trend = trend.sort_values('report_date')
+        
+        # 计算历史赎回/申购比例
+        purchase_total = trend['total_purchase_amt'].sum()
+        redeem_total = trend['total_redeem_amt'].sum()
+        redeem_ratio = redeem_total / purchase_total if purchase_total > 0 else 0.1
+        
+        print(f"📊 历史赎回/申购比例: {redeem_ratio:.2%}")
+        
+        # 获取申购金额预测结果
+        ts_train, predict_dates, steps = load_and_prepare_data()
+        forecast_predict, _ = perform_prediction(ts_train, predict_dates, steps, arima_params)
+        
+        # 根据比例估算赎回金额
+        estimated_redeem = forecast_predict * redeem_ratio
+        
+        print(f"✅ 使用历史比例估算赎回金额完成")
+        return estimated_redeem
+        
+    except Exception as e:
+        print(f"❌ 比例估算失败: {e}")
+        print("💡 使用默认比例0.1...")
+        
+        # 最后的备选方案：使用默认比例
+        ts_train, predict_dates, steps = load_and_prepare_data()
+        forecast_predict, _ = perform_prediction(ts_train, predict_dates, steps, arima_params)
+        return forecast_predict * 0.1
 
 def handle_csv_export_with_cache():
     """

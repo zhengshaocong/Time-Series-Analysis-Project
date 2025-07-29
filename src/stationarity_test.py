@@ -20,10 +20,11 @@ import matplotlib.pyplot as plt
 import matplotlib
 from statsmodels.tsa.stattools import adfuller, kpss
 from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
-from utils import adf_test
+from utils.adf import adf_test
 from utils.cache_manager import cache_manager
 from utils.menu_control import show_confirm_dialog, show_three_way_dialog
-from config import get_data_file_path, get_output_path, VISUALIZATION_CONFIG
+from utils.differencing_validator import validate_differencing
+from config import get_data_file_path, get_output_path, VISUALIZATION_CONFIG, ARIMA_CONFIG
 
 # 设置matplotlib中文字体
 matplotlib.rcParams['font.sans-serif'] = ['SimHei', 'Arial Unicode MS', 'Microsoft YaHei']
@@ -52,9 +53,62 @@ def stationarity_test():
         if not test_methods:
             print("❌ 未选择任何检验方法")
             return False
+        
+        # 询问是否进行差分验证
+        if ARIMA_CONFIG['differencing']['auto_validate']:
+            print(f"\n{'='*50}")
+            print("🔍 差分验证选项")
+            print(f"{'='*50}")
             
-        # 执行检验
-        results = perform_stationarity_tests(ts_data, test_methods)
+            diff_options = [
+                "✅ 仅进行平稳性检验",
+                "✅ 进行平稳性检验 + 自动差分验证",
+                "✅ 仅进行自动差分验证"
+            ]
+            
+            try:
+                diff_choice = show_interactive_menu(
+                    diff_options,
+                    title="选择验证方式",
+                    subtitle="使用 ↑↓ 方向键选择，回车确认，q 退出"
+                )
+            except Exception as e:
+                print(f"方向键菜单初始化失败: {e}")
+                diff_choice = show_simple_menu(diff_options, title="选择验证方式")
+            
+            if diff_choice == 0:
+                # 仅平稳性检验
+                results = perform_stationarity_tests(ts_data, test_methods)
+            elif diff_choice == 1:
+                # 平稳性检验 + 差分验证
+                results = perform_stationarity_tests(ts_data, test_methods)
+                print(f"\n{'='*60}")
+                print("🔄 开始自动差分验证...")
+                diff_config = ARIMA_CONFIG['differencing']
+                diff_result = validate_differencing(
+                    ts_data, 
+                    initial_d=diff_config['initial_d'],
+                    max_d=diff_config['max_d'],
+                    test_methods=diff_config['test_methods']
+                )
+                print(diff_result['summary'])
+            elif diff_choice == 2:
+                # 仅差分验证
+                diff_config = ARIMA_CONFIG['differencing']
+                diff_result = validate_differencing(
+                    ts_data, 
+                    initial_d=diff_config['initial_d'],
+                    max_d=diff_config['max_d'],
+                    test_methods=diff_config['test_methods']
+                )
+                print(diff_result['summary'])
+                results = {}  # 空结果，跳过后续处理
+            else:
+                print("❌ 无效选择")
+                return False
+        else:
+            # 默认仅进行平稳性检验
+            results = perform_stationarity_tests(ts_data, test_methods)
         
         # 生成可视化诊断
         output_path = create_diagnostic_plots(ts_data, results)

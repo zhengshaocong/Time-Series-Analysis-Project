@@ -37,7 +37,7 @@ PROGRAMS_CONFIG = {
         {
             'id': 'stationarity-test',
             'name': '📈 数据平稳性检验',
-            'description': '检验时间序列数据的平稳性，包括ADF、KPSS、PP检验',
+            'description': '检验时间序列数据的平稳性，包括ADF、KPSS、PP检验，支持自动差分验证',
             'script': 'src/stationarity_test.py',
             'output': 'output/images/stationarity_diagnostic.png',
             'enabled': True
@@ -53,7 +53,7 @@ PROGRAMS_CONFIG = {
         {
             'id': 'param-search',
             'name': '🔍 ARIMA参数搜索',
-            'description': '网格搜索最优ARIMA(p,d,q)参数',
+            'description': '同时搜索申购和赎回金额的最优ARIMA(p,d,q)参数',
             'script': 'script/arima_param_search.py',
             'output': '控制台输出',
             'enabled': True
@@ -61,9 +61,9 @@ PROGRAMS_CONFIG = {
         {
             'id': 'predict',
             'name': '🔮 ARIMA预测',
-            'description': '使用ARIMA模型预测申购金额',
+            'description': '使用独立的ARIMA参数预测申购和赎回金额',
             'script': 'script/arima_purchase_predict.py',
-            'output': 'output/images/arima_purchase_201409_201412_forecast.png',
+            'output': 'output/images/arima_purchase_redeem_201409_201412_forecast.png',
             'enabled': True
         },
         {
@@ -90,6 +90,15 @@ ARIMA_CONFIG = {
     'param_limits': {
         'max_params': 10,           # 最大参数个数
         'param_ratio': 0.05         # 参数个数/数据量比例
+    },
+    
+    # 差分验证配置
+    'differencing': {
+        'initial_d': 0,             # 初始差分次数
+        'max_d': 3,                 # 最大差分次数
+        'auto_validate': True,      # 是否自动验证差分
+        'stationarity_threshold': 0.05,  # 平稳性检验阈值
+        'test_methods': ['adf', 'kpss']  # 使用的检验方法
     },
     
     # 训练集配置

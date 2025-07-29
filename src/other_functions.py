@@ -26,7 +26,8 @@ def run_all():
     for name, result in results:
         print(f"{name:<20} : {'✅ 成功' if result else '❌ 失败'}")
     print("\n🎉 所有功能执行完成！")
-    show_press_enter_dialog()
+    print("💡 按回车键返回主菜单...")
+    input()
 
 def handle_plot_with_cache():
     data_file_path = get_data_file_path()
@@ -90,9 +91,10 @@ def handle_predict_with_cache():
         cache_manager.refresh_cache()
     # 重新生成预测图
     result = arima_predict()
-    output_path = get_output_path(os.path.join(VISUALIZATION_CONFIG['output_dir'], 'arima_purchase_201409_201412_forecast.png'))
+    # 由于arima_predict()现在生成的是包含申购和赎回的图表，文件名已更改
+    output_path = get_output_path(os.path.join(VISUALIZATION_CONFIG['output_dir'], 'arima_purchase_redeem_201409_201412_forecast.png'))
     cache_manager.save_image_cache(
-        data_file_path, 'prediction', output_path, "ARIMA模型预测申购金额图 (output/images/)")
+        data_file_path, 'prediction', output_path, "ARIMA模型预测申购和赎回金额图 (output/images/)")
     print("💡 预测图生成完成，正在打开...")
     _open_image(output_path)
 
@@ -126,7 +128,8 @@ def show_help():
     print("=" * 60)
     print("使用方向键或数字选择功能，回车确认，q 退出")
     print("=" * 60)
-    input("按回车键继续...")
+    print("💡 按回车键返回主菜单...")
+    input()
 
 def show_config():
     print("\n" + "=" * 60)
@@ -141,7 +144,8 @@ def show_config():
     else:
         print("\n✅ 配置验证通过")
     print("=" * 60)
-    input("按回车键继续...")
+    print("💡 按回车键返回主菜单...")
+    input()
 
 def manage_cache():
     while True:
@@ -167,7 +171,8 @@ def manage_cache():
         if selected == 0:  # 查看所有缓存
             cache_manager.refresh_cache()
             cache_manager.list_cache()
-            show_press_enter_dialog()
+            print("💡 按回车键继续...")
+            input()
         elif selected == 1:  # 查看图片缓存
             show_image_cache_info()
         elif selected == 2:  # 查看CSV缓存
@@ -175,12 +180,14 @@ def manage_cache():
         elif selected == 3:  # 清除当前文件缓存
             data_file_path = get_data_file_path()
             cache_manager.clear_cache(data_file_path)
-            show_press_enter_dialog()
+            print("💡 按回车键继续...")
+            input()
         elif selected == 4:  # 清除所有缓存
             confirm = show_confirm_dialog("确定要清除所有缓存吗？")
             if confirm:
                 cache_manager.clear_cache()
-            show_press_enter_dialog()
+            print("💡 按回车键继续...")
+            input()
         elif selected == 5 or selected == -1:  # 返回主菜单或退出
             break
         else:
@@ -193,7 +200,8 @@ def show_image_cache_info():
     all_images = cache_manager.get_all_image_cache(data_file_path)
     if not all_images:
         print("📭 暂无图片缓存记录")
-        show_press_enter_dialog()
+        print("💡 按回车键继续...")
+        input()
         return
     print("🖼️  图片缓存信息:")
     print("=" * 80)
@@ -204,7 +212,8 @@ def show_image_cache_info():
         print(f"生成时间: {image_info['timestamp']}")
         print(f"文件存在: {'✅ 是' if image_info['exists'] else '❌ 否'}")
         print("-" * 40)
-    show_press_enter_dialog()
+    print("💡 按回车键继续...")
+    input()
 
 def show_csv_cache_info():
     data_file_path = get_data_file_path()
@@ -212,7 +221,8 @@ def show_csv_cache_info():
     all_csvs = cache_manager.get_all_csv_cache(data_file_path)
     if not all_csvs:
         print("📭 暂无CSV缓存记录")
-        show_press_enter_dialog()
+        print("💡 按回车键继续...")
+        input()
         return
     print("📊 CSV缓存信息:")
     print("=" * 80)
@@ -223,7 +233,8 @@ def show_csv_cache_info():
         print(f"生成时间: {csv_info['timestamp']}")
         print(f"文件存在: {'✅ 是' if csv_info['exists'] else '❌ 否'}")
         print("-" * 40)
-    show_press_enter_dialog()
+    print("💡 按回车键继续...")
+    input()
 
 def exit_program():
     print("👋 感谢使用，再见！")

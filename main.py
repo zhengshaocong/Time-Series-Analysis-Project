@@ -66,9 +66,19 @@ def main():
             name = prog['name']
             # ARIMA参数搜索显示参数缓存摘要
             if prog['id'] == 'param-search' and CACHE_CONFIG['settings']['show_cache_info']:
-                cache_summary = cache_manager.get_cache_summary(data_file_path)
-                if cache_summary:
-                    name += f" {cache_summary}"
+                purchase_summary = cache_manager.get_cache_summary(data_file_path, 'purchase')
+                redeem_summary = cache_manager.get_cache_summary(data_file_path, 'redeem')
+                # 兼容旧格式
+                old_summary = cache_manager.get_cache_summary(data_file_path)
+                summary_parts = []
+                if purchase_summary:
+                    summary_parts.append(purchase_summary)
+                if redeem_summary:
+                    summary_parts.append(redeem_summary)
+                if not summary_parts and old_summary:
+                    summary_parts.append(old_summary)
+                if summary_parts:
+                    name += ' ' + ' '.join(summary_parts)
             # 趋势图显示图片缓存状态
             if prog['id'] == 'plot':
                 img_status = get_image_cache_summary(data_file_path, 'trend')
@@ -110,6 +120,7 @@ def main():
                 input("按回车键继续...")
             else:
                 print(f"❌ 未找到功能: {program_names[selected]}")
+                input("按回车键继续...")
         elif selected == len(program_names):
             run_all()
         elif selected == len(program_names) + 1:
@@ -119,11 +130,6 @@ def main():
         elif selected == len(program_names) + 3:
             manage_cache()
         elif selected == len(program_names) + 4 or selected == -1:
-            exit_program()
-        # 询问是否继续
-        print(f"\n{'='*40}")
-        continue_choice = show_continue_dialog()
-        if not continue_choice:
             exit_program()
 
 if __name__ == '__main__':

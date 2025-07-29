@@ -27,7 +27,6 @@ import numpy as np
 from statsmodels.tsa.arima.model import ARIMA
 import matplotlib.pyplot as plt
 import matplotlib
-from utils import adf_test
 from utils.cache_manager import cache_manager
 from utils.menu_control import show_confirm_dialog, show_three_way_dialog
 from config import get_data_file_path
@@ -73,13 +72,14 @@ def load_and_prepare_data():
     
     return ts_train, predict_dates, steps
 
-def get_arima_params_with_cache(data_file_path, ts_train):
+def get_arima_params_with_cache(data_file_path, ts_train, series_type='purchase'):
     """
     获取ARIMA参数，优先使用缓存
     
     参数：
         data_file_path: str - 数据文件路径
         ts_train: pd.Series - 训练集时间序列
+        series_type: str - 'purchase' 或 'redeem'，用于区分申购和赎回
     
     返回：
         tuple: (p, d, q) - ARIMA参数
@@ -93,7 +93,7 @@ def get_arima_params_with_cache(data_file_path, ts_train):
     if cached_info and isinstance(cached_info, dict) and 'best_params' in cached_info:
         # 有缓存参数，询问是否使用
         print(f"\n{'='*60}")
-        print("📋 发现缓存的ARIMA参数:")
+        print(f"📋 发现缓存的ARIMA参数 ({series_type.capitalize()}):")
         print(f"最优参数: ARIMA{cached_info['best_params']}")
         print(f"AIC值: {cached_info['best_aic']:.2f}")
         print(f"参数个数: {cached_info.get('total_params', 'N/A')} ({cached_info.get('param_ratio', 'N/A')}%)")
@@ -101,47 +101,48 @@ def get_arima_params_with_cache(data_file_path, ts_train):
         print(f"{'='*60}")
         
         choice = show_three_way_dialog(
-            "是否使用缓存的ARIMA参数进行预测？",
+            f"是否使用缓存的ARIMA参数 ({series_type.capitalize()}) 进行预测？",
             ["✅ 使用缓存参数", "🔄 生成新参数", "❌ 取消预测"]
         )
         
         if choice == 0:  # 使用缓存参数
-            print("✅ 使用缓存的ARIMA参数进行预测")
+            print(f"✅ 使用缓存的ARIMA参数 ({series_type.capitalize()}) 进行预测")
             return cached_info['best_params']
         elif choice == 1:  # 生成新参数
-            print("🔄 将生成新的ARIMA参数...")
-            return generate_new_params(ts_train)
+            print(f"🔄 将生成新的ARIMA参数 ({series_type.capitalize()} 金额)...")
+            return generate_new_params(ts_train, series_type)
         elif choice == 2:  # 取消
-            print("❌ 预测已取消")
+            print(f"❌ 预测已取消 ({series_type.capitalize()} 金额)")
             return None
         else:
-            print("❌ 无效选择，预测已取消")
+            print(f"❌ 无效选择，预测已取消 ({series_type.capitalize()} 金额)")
             return None
     else:
         # 没有缓存参数，询问是否生成
         print(f"\n{'='*60}")
-        print("📭 未发现缓存的ARIMA参数")
-        print("💡 建议：先生成最佳ARIMA参数，再进行预测")
+        print(f"📭 未发现缓存的ARIMA参数 ({series_type.capitalize()})")
+        print(f"💡 建议：先生成最佳ARIMA参数，再进行预测")
         print(f"{'='*60}")
         
         choice = show_confirm_dialog(
-            "是否现在生成新的最佳ARIMA参数并进行预测？",
+            f"是否现在生成新的最佳ARIMA参数 ({series_type.capitalize()} 金额) 并进行预测？",
             default_yes=True
         )
         
         if choice:
-            print("🔄 将生成新的ARIMA参数...")
-            return generate_new_params(ts_train)
+            print(f"🔄 将生成新的ARIMA参数 ({series_type.capitalize()} 金额)...")
+            return generate_new_params(ts_train, series_type)
         else:
-            print("❌ 预测已取消")
+            print(f"❌ 预测已取消 ({series_type.capitalize()} 金额)")
             return None
 
-def generate_new_params(ts_train):
+def generate_new_params(ts_train, series_type='purchase'):
     """
     生成新的ARIMA参数
     
     参数：
         ts_train: pd.Series - 训练集时间序列
+        series_type: str - 'purchase' 或 'redeem'，用于区分申购和赎回
     
     返回：
         tuple: (p, d, q) - ARIMA参数
@@ -150,8 +151,8 @@ def generate_new_params(ts_train):
         # 导入网格搜索函数
         from utils.arima_grid_search import arima_grid_search
         
-        print("🔍 开始ARIMA参数网格搜索...")
-        print("💡 建议：在进行ARIMA建模前，建议先使用'数据平稳性检验'功能检查数据平稳性")
+        print(f"🔍 开始ARIMA参数网格搜索 ({series_type.capitalize()} 金额)...")
+        print(f"💡 建议：在进行ARIMA建模前，建议先使用'数据平稳性检验'功能检查数据平稳性")
         
         # 设置参数搜索范围
         data_length = len(ts_train)
@@ -168,15 +169,15 @@ def generate_new_params(ts_train):
         )
         
         if best_params is not None:
-            print(f"✅ 成功生成新的ARIMA参数: ARIMA{best_params}")
+            print(f"✅ 成功生成新的ARIMA参数 ({series_type.capitalize()} 金额): ARIMA{best_params}")
             return best_params
         else:
-            print("❌ 参数搜索失败，使用默认参数 (2,1,4)")
+            print(f"❌ 参数搜索失败，使用默认参数 (2,1,4) ({series_type.capitalize()} 金额)")
             return (2, 1, 4)
             
     except Exception as e:
         print(f"❌ 参数生成失败: {e}")
-        print("💡 使用默认参数 (2,1,4)")
+        print(f"💡 使用默认参数 (2,1,4) ({series_type.capitalize()} 金额)")
         return (2, 1, 4)
 
 def perform_prediction(ts_train, predict_dates, steps, arima_params):
@@ -206,6 +207,186 @@ def perform_prediction(ts_train, predict_dates, steps, arima_params):
     print(f"📊 预测区间: {predict_dates[0].strftime('%Y-%m-%d')} 至 {predict_dates[-1].strftime('%Y-%m-%d')}")
     
     return forecast_predict, model_fit
+
+def perform_redeem_prediction(arima_params, predict_dates, steps):
+    """
+    预测赎回金额
+    
+    参数:
+        arima_params: ARIMA参数
+        predict_dates: 预测日期
+        steps: 预测步数
+    
+    返回:
+        tuple: (forecast_redeem, model_fit_redeem)
+    """
+    try:
+        # 加载赎回金额数据
+        file_path = get_data_file_path()
+        df = pd.read_csv(file_path)
+        
+        # 确保report_date为字符串
+        if df['report_date'].dtype != 'O':
+            df['report_date'] = df['report_date'].astype(str)
+        
+        # 只保留2014年3月及以后的数据
+        df = df[df['report_date'] >= '20140301']
+        
+        # 按日期汇总赎回金额，并按时间排序
+        trend = df.groupby('report_date')['total_redeem_amt'].sum().reset_index()
+        trend = trend.sort_values('report_date')
+        
+        # 构造时间序列索引
+        dates = pd.to_datetime(trend['report_date'], format='%Y%m%d')
+        ts_redeem = pd.Series(trend['total_redeem_amt'].values, index=dates)
+        
+        # 训练集：2014年3月1日~2014年8月31日
+        ts_train_redeem = ts_redeem[(ts_redeem.index >= '2014-03-01') & (ts_redeem.index <= '2014-08-31')]
+        
+        print(f"📊 赎回金额训练集长度: {len(ts_train_redeem)}")
+        print(f"📊 赎回金额训练集均值: {ts_train_redeem.mean():.2f}")
+        print(f"📊 赎回金额训练集标准差: {ts_train_redeem.std():.2f}")
+        
+        # 使用同样的ARIMA参数对赎回金额建模
+        model_redeem = ARIMA(ts_train_redeem, order=arima_params)
+        model_fit_redeem = model_redeem.fit()
+        forecast_redeem = model_fit_redeem.forecast(steps=steps)
+        forecast_redeem_predict = forecast_redeem[-len(predict_dates):]
+        
+        print(f"✅ 赎回金额预测完成，预测步数: {steps}")
+        print(f"📊 赎回金额预测区间: {predict_dates[0].strftime('%Y-%m-%d')} 至 {predict_dates[-1].strftime('%Y-%m-%d')}")
+        
+        return forecast_redeem_predict, model_fit_redeem
+        
+    except Exception as e:
+        print(f"❌ 赎回金额预测失败: {e}")
+        print("💡 将使用比例估算方法...")
+        
+        # 如果预测失败，使用比例估算
+        try:
+            estimated_redeem = estimate_redeem_by_ratio(arima_params, predict_dates, steps)
+            return estimated_redeem, None
+        except Exception as e2:
+            print(f"❌ 比例估算也失败: {e2}")
+            return None, None
+
+def perform_redeem_prediction_with_params(redeem_params, predict_dates, steps):
+    """
+    使用指定的ARIMA参数预测赎回金额
+    
+    参数:
+        redeem_params: tuple - 赎回金额的ARIMA参数
+        predict_dates: pd.DatetimeIndex - 预测日期
+        steps: int - 预测步数
+    
+    返回:
+        tuple: (forecast_redeem, model_fit_redeem)
+    """
+    try:
+        # 加载赎回金额数据
+        file_path = get_data_file_path()
+        df = pd.read_csv(file_path)
+        
+        # 确保report_date为字符串
+        if df['report_date'].dtype != 'O':
+            df['report_date'] = df['report_date'].astype(str)
+        
+        # 只保留2014年3月及以后的数据
+        df = df[df['report_date'] >= '20140301']
+        
+        # 按日期汇总赎回金额，并按时间排序
+        trend = df.groupby('report_date')['total_redeem_amt'].sum().reset_index()
+        trend = trend.sort_values('report_date')
+        
+        # 构造时间序列索引
+        dates = pd.to_datetime(trend['report_date'], format='%Y%m%d')
+        ts_redeem = pd.Series(trend['total_redeem_amt'].values, index=dates)
+        
+        # 训练集：2014年3月1日~2014年8月31日
+        ts_train_redeem = ts_redeem[(ts_redeem.index >= '2014-03-01') & (ts_redeem.index <= '2014-08-31')]
+        
+        print(f"📊 赎回金额训练集长度: {len(ts_train_redeem)}")
+        print(f"📊 赎回金额训练集均值: {ts_train_redeem.mean():.2f}")
+        print(f"📊 赎回金额训练集标准差: {ts_train_redeem.std():.2f}")
+        print(f"📊 使用ARIMA参数: {redeem_params}")
+        
+        # 使用指定的ARIMA参数对赎回金额建模
+        model_redeem = ARIMA(ts_train_redeem, order=redeem_params)
+        model_fit_redeem = model_redeem.fit()
+        forecast_redeem = model_fit_redeem.forecast(steps=steps)
+        forecast_redeem_predict = forecast_redeem[-len(predict_dates):]
+        
+        print(f"✅ 赎回金额预测完成，预测步数: {steps}")
+        print(f"📊 赎回金额预测区间: {predict_dates[0].strftime('%Y-%m-%d')} 至 {predict_dates[-1].strftime('%Y-%m-%d')}")
+        print(f"📊 赎回金额预测均值: {forecast_redeem_predict.mean():.2f}")
+        print(f"📊 赎回金额预测标准差: {forecast_redeem_predict.std():.2f}")
+        
+        return forecast_redeem_predict, model_fit_redeem
+        
+    except Exception as e:
+        print(f"❌ 赎回金额预测失败: {e}")
+        print("💡 将使用比例估算方法...")
+        
+        # 如果预测失败，使用比例估算
+        try:
+            estimated_redeem = estimate_redeem_by_ratio(redeem_params, predict_dates, steps)
+            return estimated_redeem, None
+        except Exception as e2:
+            print(f"❌ 比例估算也失败: {e2}")
+            return None, None
+
+def estimate_redeem_by_ratio(arima_params, predict_dates, steps):
+    """
+    使用历史赎回/申购比例估算赎回金额
+    
+    参数:
+        arima_params: ARIMA参数
+        predict_dates: 预测日期
+        steps: 预测步数
+    
+    返回:
+        pd.Series: 估算的赎回金额
+    """
+    try:
+        # 加载历史数据计算比例
+        file_path = get_data_file_path()
+        df = pd.read_csv(file_path)
+        
+        if df['report_date'].dtype != 'O':
+            df['report_date'] = df['report_date'].astype(str)
+        
+        # 只保留2014年3月及以后的数据
+        df = df[df['report_date'] >= '20140301']
+        
+        # 按日期汇总
+        trend = df.groupby('report_date')[['total_purchase_amt', 'total_redeem_amt']].sum().reset_index()
+        trend = trend.sort_values('report_date')
+        
+        # 计算历史赎回/申购比例
+        purchase_total = trend['total_purchase_amt'].sum()
+        redeem_total = trend['total_redeem_amt'].sum()
+        redeem_ratio = redeem_total / purchase_total if purchase_total > 0 else 0.1
+        
+        print(f"📊 历史赎回/申购比例: {redeem_ratio:.2%}")
+        
+        # 获取申购金额预测结果
+        ts_train, _, _ = load_and_prepare_data()
+        forecast_purchase, _ = perform_prediction(ts_train, predict_dates, steps, arima_params)
+        
+        # 根据比例估算赎回金额
+        estimated_redeem = forecast_purchase * redeem_ratio
+        
+        print(f"✅ 使用历史比例估算赎回金额完成")
+        return estimated_redeem
+        
+    except Exception as e:
+        print(f"❌ 比例估算失败: {e}")
+        print("💡 使用默认比例0.1...")
+        
+        # 最后的备选方案：使用默认比例
+        ts_train, _, _ = load_and_prepare_data()
+        forecast_purchase, _ = perform_prediction(ts_train, predict_dates, steps, arima_params)
+        return forecast_purchase * 0.1
 
 def create_visualization(ts_train, forecast_predict, arima_params):
     """
@@ -253,6 +434,97 @@ def create_visualization(ts_train, forecast_predict, arima_params):
     
     return output_path
 
+def create_visualization_with_redeem(ts_train, forecast_purchase, forecast_redeem, purchase_arima_params, redeem_arima_params):
+    """
+    创建包含申购和赎回的可视化
+    
+    参数:
+        ts_train: pd.Series - 申购金额训练集
+        forecast_purchase: pd.Series - 申购金额预测结果
+        forecast_redeem: pd.Series - 赎回金额预测结果
+        purchase_arima_params: tuple - 申购金额ARIMA参数
+        redeem_arima_params: tuple - 赎回金额ARIMA参数
+    """
+    print(f"\n{'='*50}")
+    print("🎨 生成预测结果图表...")
+    print(f"{'='*50}")
+    
+    # 加载赎回金额历史数据
+    try:
+        file_path = get_data_file_path()
+        df = pd.read_csv(file_path)
+        
+        if df['report_date'].dtype != 'O':
+            df['report_date'] = df['report_date'].astype(str)
+        
+        df = df[df['report_date'] >= '20140301']
+        trend = df.groupby('report_date')['total_redeem_amt'].sum().reset_index()
+        trend = trend.sort_values('report_date')
+        dates = pd.to_datetime(trend['report_date'], format='%Y%m%d')
+        ts_redeem = pd.Series(trend['total_redeem_amt'].values, index=dates)
+        ts_train_redeem = ts_redeem[(ts_redeem.index >= '2014-03-01') & (ts_redeem.index <= '2014-08-31')]
+    except Exception as e:
+        print(f"⚠️ 加载赎回金额历史数据失败: {e}")
+        ts_train_redeem = None
+    
+    plt.figure(figsize=(14, 10))  # 增加图表高度
+    
+    # 绘制申购金额预测
+    plt.subplot(2, 1, 1)
+    ts_train.plot(label='训练集历史申购金额', color='tab:blue', linewidth=2)
+    forecast_purchase.plot(label='预测申购金额', color='tab:orange', linewidth=2)
+    plt.title(f'2014年9月至2014年12月申购金额预测（ARIMA{purchase_arima_params}）', fontsize=16)
+    plt.xlabel('日期', fontsize=12)
+    plt.ylabel('申购金额', fontsize=12)
+    plt.grid(True, linestyle='--', alpha=0.6)
+    all_dates_purchase = list(ts_train.index) + list(forecast_purchase.index)
+    all_dates_series_purchase = pd.Series(1, index=pd.to_datetime(all_dates_purchase)).sort_index()
+    month_starts_purchase = all_dates_series_purchase.resample('MS').first().dropna().index
+    xticks_purchase = month_starts_purchase
+    xtick_labels_purchase = [f"{dt.year}年{dt.month}月" for dt in xticks_purchase]
+    plt.xticks(xticks_purchase, xtick_labels_purchase, rotation=45, fontsize=10)
+    plt.yticks(fontsize=10)
+    plt.legend(fontsize=11)
+    
+    # 绘制赎回金额预测
+    plt.subplot(2, 1, 2)
+    if forecast_redeem is not None:
+        if ts_train_redeem is not None:
+            ts_train_redeem.plot(label='训练集历史赎回金额', color='tab:green', linewidth=2)
+        forecast_redeem.plot(label='预测赎回金额', color='tab:red', linewidth=2)
+        plt.title(f'2014年9月至2014年12月赎回金额预测（ARIMA{redeem_arima_params}）', fontsize=16)
+        plt.xlabel('日期', fontsize=12)
+        plt.ylabel('赎回金额', fontsize=12)
+        plt.grid(True, linestyle='--', alpha=0.6)
+        all_dates_redeem = list(forecast_redeem.index)
+        if ts_train_redeem is not None:
+            all_dates_redeem = list(ts_train_redeem.index) + all_dates_redeem
+        all_dates_series_redeem = pd.Series(1, index=pd.to_datetime(all_dates_redeem)).sort_index()
+        month_starts_redeem = all_dates_series_redeem.resample('MS').first().dropna().index
+        xticks_redeem = month_starts_redeem
+        xtick_labels_redeem = [f"{dt.year}年{dt.month}月" for dt in xticks_redeem]
+        plt.xticks(xticks_redeem, xtick_labels_redeem, rotation=45, fontsize=10)
+        plt.yticks(fontsize=10)
+        plt.legend(fontsize=11)
+    else:
+        plt.text(0.5, 0.5, '赎回金额预测数据不可用', horizontalalignment='center', 
+                verticalalignment='center', transform=plt.gca().transAxes, fontsize=14)
+        plt.title('赎回金额预测', fontsize=16)
+        plt.axis('off')
+    
+    plt.tight_layout()
+    
+    # 保存图片
+    output_dir = 'output/images'
+    os.makedirs(output_dir, exist_ok=True)
+    output_path = os.path.join(output_dir, 'arima_purchase_redeem_201409_201412_forecast.png')
+    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    
+    print(f"✅ 图表已保存: {output_path}")
+    
+    return output_path
+
 def main():
     """
     主函数
@@ -267,37 +539,73 @@ def main():
         ts_train, predict_dates, steps = load_and_prepare_data()
         print(f"✅ 数据加载完成，训练集长度: {len(ts_train)}")
         
-        # 2. 获取ARIMA参数（优先使用缓存）
+        # 2. 获取申购金额的ARIMA参数（优先使用缓存）
         data_file_path = get_data_file_path()
-        arima_params = get_arima_params_with_cache(data_file_path, ts_train)
+        purchase_params = get_arima_params_with_cache(data_file_path, ts_train, series_type='purchase')
         
-        if arima_params is None:
-            print("❌ 预测已取消")
+        if purchase_params is None:
+            print("❌ 申购金额参数获取失败，预测已取消")
             return False
         
-        # 3. 执行预测
-        forecast_predict, model_fit = perform_prediction(ts_train, predict_dates, steps, arima_params)
+        # 3. 获取赎回金额的ARIMA参数
+        print(f"\n{'='*50}")
+        print("🔍 获取赎回金额最优参数...")
+        print(f"{'='*50}")
         
-        # 4. 创建可视化
-        output_path = create_visualization(ts_train, forecast_predict, arima_params)
+        # 加载赎回金额数据
+        df = pd.read_csv(data_file_path)
+        if df['report_date'].dtype != 'O':
+            df['report_date'] = df['report_date'].astype(str)
+        df = df[df['report_date'] >= '20140301']
+        redeem_trend = df.groupby('report_date')['total_redeem_amt'].sum().reset_index()
+        redeem_trend = redeem_trend.sort_values('report_date')
+        redeem_dates = pd.to_datetime(redeem_trend['report_date'], format='%Y%m%d')
+        ts_redeem = pd.Series(redeem_trend['total_redeem_amt'].values, index=redeem_dates)
+        ts_train_redeem = ts_redeem[(ts_redeem.index >= '2014-03-01') & (ts_redeem.index <= '2014-08-31')]
         
-        # 5. 输出预测统计信息
+        redeem_params = get_arima_params_with_cache(data_file_path, ts_train_redeem, series_type='redeem')
+        if redeem_params is None:
+            print("⚠️ 赎回金额参数获取失败，将使用申购金额的参数")
+            redeem_params = purchase_params
+        
+        # 4. 执行申购金额预测
+        forecast_purchase, model_fit_purchase = perform_prediction(ts_train, predict_dates, steps, purchase_params)
+        
+        # 5. 执行赎回金额预测（使用赎回金额的最优参数）
+        print(f"\n{'='*50}")
+        print("🔄 开始预测赎回金额...")
+        print(f"{'='*50}")
+        forecast_redeem, model_fit_redeem = perform_redeem_prediction(redeem_params, predict_dates, steps)
+        
+        # 6. 创建包含申购和赎回的可视化
+        output_path = create_visualization_with_redeem(ts_train, forecast_purchase, forecast_redeem, purchase_params, redeem_params)
+        
+        # 7. 输出预测统计信息
         print(f"\n{'='*50}")
         print("📈 预测结果统计")
         print(f"{'='*50}")
-        print(f"训练集均值: {ts_train.mean():.2f}")
-        print(f"训练集标准差: {ts_train.std():.2f}")
-        print(f"预测均值: {forecast_predict.mean():.2f}")
-        print(f"预测标准差: {forecast_predict.std():.2f}")
-        print(f"模型AIC: {model_fit.aic:.2f}")
-        print(f"模型BIC: {model_fit.bic:.2f}")
+        print(f"申购金额 - 训练集均值: {ts_train.mean():.2f}")
+        print(f"申购金额 - 训练集标准差: {ts_train.std():.2f}")
+        print(f"申购金额 - 预测均值: {forecast_purchase.mean():.2f}")
+        print(f"申购金额 - 预测标准差: {forecast_purchase.std():.2f}")
+        print(f"申购金额 - 模型AIC: {model_fit_purchase.aic:.2f}")
+        print(f"申购金额 - 模型BIC: {model_fit_purchase.bic:.2f}")
+        print(f"申购金额 - 使用参数: ARIMA{purchase_params}")
         
-        # 6. 保存图片缓存
+        if forecast_redeem is not None:
+            print(f"赎回金额 - 预测均值: {forecast_redeem.mean():.2f}")
+            print(f"赎回金额 - 预测标准差: {forecast_redeem.std():.2f}")
+            if hasattr(model_fit_redeem, 'aic') and model_fit_redeem is not None:
+                print(f"赎回金额 - 模型AIC: {model_fit_redeem.aic:.2f}")
+                print(f"赎回金额 - 模型BIC: {model_fit_redeem.bic:.2f}")
+            print(f"赎回金额 - 使用参数: ARIMA{redeem_params}")
+        
+        # 8. 保存图片缓存
         cache_manager.save_image_cache(
             data_file_path,
             'prediction',
             output_path,
-            f"ARIMA{arima_params}模型预测申购金额图 (output/images/)"
+            f"ARIMA申购{purchase_params}_赎回{redeem_params}模型预测图 (output/images/)"
         )
         
         print(f"\n{'='*60}")
