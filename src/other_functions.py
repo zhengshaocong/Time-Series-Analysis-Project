@@ -10,7 +10,7 @@ from src.arima_param_search import arima_param_search
 from src.arima_predict import arima_predict
 from utils.cache_manager import cache_manager
 from config import print_config_summary, validate_config, get_data_file_path, get_output_path, VISUALIZATION_CONFIG
-from utils.menu_control import show_press_enter_dialog, show_confirm_dialog, clear_screen, show_three_way_dialog
+from utils.menu_control import show_press_enter_dialog, show_confirm_dialog, clear_screen, show_three_way_dialog, show_interactive_menu, show_simple_menu
 import os
 import sys
 import subprocess
@@ -113,8 +113,7 @@ def _open_image(image_path):
         print(f"💡 请手动打开文件: {abs_image_path}")
 
 def show_help():
-    clear_screen()
-    print("=" * 60)
+    print("\n" + "=" * 60)
     print("📖 帮助信息")
     print("=" * 60)
     print("1. 📈 绘制资金流入流出趋势图：分析用户申购和赎回金额的时间趋势，输出到 output/images/")
@@ -126,10 +125,13 @@ def show_help():
     print("7. 🚪 退出程序")
     print("=" * 60)
     print("使用方向键或数字选择功能，回车确认，q 退出")
-    show_press_enter_dialog()
+    print("=" * 60)
+    input("按回车键继续...")
 
 def show_config():
-    clear_screen()
+    print("\n" + "=" * 60)
+    print("⚙️  配置信息")
+    print("=" * 60)
     print_config_summary()
     errors = validate_config()
     if errors:
@@ -138,38 +140,49 @@ def show_config():
             print(f"  - {error}")
     else:
         print("\n✅ 配置验证通过")
-    show_press_enter_dialog()
+    print("=" * 60)
+    input("按回车键继续...")
 
 def manage_cache():
     while True:
-        clear_screen()
-        print("=" * 60)
-        print("🗑️  缓存管理")
-        print("=" * 60)
-        print("1. 📋 查看所有缓存")
-        print("2. 🖼️  查看图片缓存")
-        print("3. 🗑️  清除当前文件缓存")
-        print("4. 🗑️  清除所有缓存")
-        print("0. 🔙 返回主菜单")
-        print("=" * 60)
-        choice = input("请选择操作: ").strip()
-        if choice == '0':
-            break
-        elif choice == '1':
+        cache_menu_items = [
+            "📋 查看所有缓存",
+            "🖼️  查看图片缓存", 
+            "📊 查看CSV缓存",
+            "🗑️  清除当前文件缓存",
+            "🗑️  清除所有缓存",
+            "🔙 返回主菜单"
+        ]
+        
+        try:
+            selected = show_interactive_menu(
+                cache_menu_items, 
+                title="🗑️  缓存管理", 
+                subtitle="使用 ↑↓ 方向键选择，回车确认，q 退出"
+            )
+        except Exception as e:
+            print(f"方向键菜单初始化失败: {e}")
+            selected = show_simple_menu(cache_menu_items, title="🗑️  缓存管理")
+        
+        if selected == 0:  # 查看所有缓存
             cache_manager.refresh_cache()
             cache_manager.list_cache()
             show_press_enter_dialog()
-        elif choice == '2':
+        elif selected == 1:  # 查看图片缓存
             show_image_cache_info()
-        elif choice == '3':
+        elif selected == 2:  # 查看CSV缓存
+            show_csv_cache_info()
+        elif selected == 3:  # 清除当前文件缓存
             data_file_path = get_data_file_path()
             cache_manager.clear_cache(data_file_path)
             show_press_enter_dialog()
-        elif choice == '4':
+        elif selected == 4:  # 清除所有缓存
             confirm = show_confirm_dialog("确定要清除所有缓存吗？")
             if confirm:
                 cache_manager.clear_cache()
             show_press_enter_dialog()
+        elif selected == 5 or selected == -1:  # 返回主菜单或退出
+            break
         else:
             print("❌ 无效选择")
             show_press_enter_dialog()
@@ -190,6 +203,25 @@ def show_image_cache_info():
         print(f"描述: {image_info['description']}")
         print(f"生成时间: {image_info['timestamp']}")
         print(f"文件存在: {'✅ 是' if image_info['exists'] else '❌ 否'}")
+        print("-" * 40)
+    show_press_enter_dialog()
+
+def show_csv_cache_info():
+    data_file_path = get_data_file_path()
+    cache_manager.refresh_cache()
+    all_csvs = cache_manager.get_all_csv_cache(data_file_path)
+    if not all_csvs:
+        print("📭 暂无CSV缓存记录")
+        show_press_enter_dialog()
+        return
+    print("📊 CSV缓存信息:")
+    print("=" * 80)
+    for csv_type, csv_info in all_csvs.items():
+        print(f"类型: {csv_type}")
+        print(f"路径: {csv_info['path']}")
+        print(f"描述: {csv_info['description']}")
+        print(f"生成时间: {csv_info['timestamp']}")
+        print(f"文件存在: {'✅ 是' if csv_info['exists'] else '❌ 否'}")
         print("-" * 40)
     show_press_enter_dialog()
 

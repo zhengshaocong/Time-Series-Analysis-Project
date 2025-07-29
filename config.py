@@ -57,6 +57,14 @@ PROGRAMS_CONFIG = {
             'script': 'script/arima_purchase_predict.py',
             'output': 'output/images/arima_purchase_201409_201412_forecast.png',
             'enabled': True
+        },
+        {
+            'id': 'csv-export',
+            'name': '📊 生成预测CSV文件',
+            'description': '根据ARIMA预测结果生成CSV文件',
+            'script': 'src/csv_export.py',
+            'output': 'output/data/arima_prediction_results.csv',
+            'enabled': True
         }
     ]
 }
@@ -109,6 +117,28 @@ VISUALIZATION_CONFIG = {
         'predict': 'tab:orange',
         'purchase': 'tab:blue',
         'redeem': 'tab:red'
+    }
+}
+
+# CSV输出配置
+CSV_CONFIG = {
+    # CSV输出目录
+    'output_dir': 'output/data',
+    
+    # CSV文件配置
+    'files': {
+        'prediction': {
+            'filename': 'arima_prediction_results.csv',
+            'columns': ['report_date', 'purchase', 'redeem'],
+            'description': 'ARIMA模型预测结果CSV文件'
+        }
+    },
+    
+    # 数据格式配置
+    'format': {
+        'date_format': '%Y%m%d',  # 日期格式
+        'decimal_places': 2,      # 小数位数
+        'encoding': 'utf-8'       # 文件编码
     }
 }
 

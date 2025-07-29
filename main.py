@@ -9,6 +9,7 @@ from pathlib import Path
 from src.plot_trend import plot_trend
 from src.arima_param_search import arima_param_search
 from src.arima_predict import arima_predict
+from src.csv_export import handle_csv_export_with_cache
 from src.other_functions import run_all, show_help, exit_program, manage_cache, show_config, handle_plot_with_cache, handle_predict_with_cache
 from utils.menu_control import (
     show_interactive_menu, show_simple_menu, clear_screen,
@@ -28,6 +29,8 @@ def get_program_func(program_id):
         return arima_param_search
     elif program_id == 'predict':
         return handle_predict_with_cache
+    elif program_id == 'csv-export':
+        return handle_csv_export_with_cache
     else:
         return None
 
@@ -36,6 +39,15 @@ def get_image_cache_summary(data_file_path, image_type):
     if image_cache and image_cache.get('exists'):
         return f"🖼️ 已缓存"
     elif image_cache:
+        return f"⚠️ 缓存丢失"
+    else:
+        return ""
+
+def get_csv_cache_summary(data_file_path):
+    csv_cache = cache_manager.get_csv_cache(data_file_path, 'prediction')
+    if csv_cache and csv_cache.get('exists'):
+        return f"📊 已缓存"
+    elif csv_cache:
         return f"⚠️ 缓存丢失"
     else:
         return ""
@@ -64,6 +76,11 @@ def main():
                 img_status = get_image_cache_summary(data_file_path, 'prediction')
                 if img_status:
                     name += f" {img_status}"
+            # CSV导出显示缓存状态
+            if prog['id'] == 'csv-export':
+                csv_status = get_csv_cache_summary(data_file_path)
+                if csv_status:
+                    name += f" {csv_status}"
             program_names.append(name)
             program_ids.append(prog['id'])
         # 固定额外功能项

@@ -389,13 +389,13 @@ class CacheManager:
         """
         检查图片文件是否存在
         
-        检查缓存中的图片文件是否仍然存在，并更新缓存中的存在状态。
+        检查指定类型的图片文件是否存在，并更新缓存中的状态。
         
         参数：
             data_file_path: str 或 Path
                 数据文件路径
             image_type: str
-                图片类型
+                图片类型，如 'trend', 'prediction'
         
         返回：
             tuple: (图片路径, 是否存在)
@@ -427,6 +427,148 @@ class CacheManager:
             self._save_cache()
         
         return str(image_path), exists
+    
+    def save_csv_cache(self, data_file_path, csv_type, csv_path, description=""):
+        """
+        保存CSV文件缓存
+        
+        保存CSV文件的路径和相关信息到缓存中。
+        
+        参数：
+            data_file_path: str 或 Path
+                数据文件路径
+            csv_type: str
+                CSV类型，如 'prediction'
+            csv_path: str 或 Path
+                CSV文件路径
+            description: str, 默认 ""
+                CSV文件描述
+        
+        示例：
+            >>> self.save_csv_cache("data.csv", "prediction", "output/data/results.csv", "预测结果")
+        
+        注意事项：
+            1. 自动创建缓存键
+            2. 保存文件存在状态
+            3. 记录时间戳
+        """
+        cache_key = self.get_cache_key(data_file_path)
+        if not cache_key:
+            print("❌ 无法生成缓存键")
+            return
+        
+        # 确保缓存记录存在
+        if cache_key not in self.cache_data:
+            self.cache_data[cache_key] = {}
+        
+        # 确保CSV缓存结构存在
+        if 'csv_files' not in self.cache_data[cache_key]:
+            self.cache_data[cache_key]['csv_files'] = {}
+        
+        # 保存CSV缓存信息
+        csv_path = Path(csv_path)
+        self.cache_data[cache_key]['csv_files'][csv_type] = {
+            'path': str(csv_path),
+            'type': csv_type,
+            'description': description,
+            'timestamp': datetime.now().isoformat(),
+            'exists': csv_path.exists()
+        }
+        
+        self._save_cache()
+        print(f"✅ CSV缓存已保存: {csv_type}")
+    
+    def get_csv_cache(self, data_file_path, csv_type='prediction'):
+        """
+        获取CSV文件缓存
+        
+        获取指定类型的CSV文件缓存信息。
+        
+        参数：
+            data_file_path: str 或 Path
+                数据文件路径
+            csv_type: str, 默认 'prediction'
+                CSV类型
+        
+        返回：
+            dict 或 None: CSV缓存信息
+                包含路径、类型、描述、时间戳、存在状态
+                如果不存在则返回None
+        
+        示例：
+            >>> cache = self.get_csv_cache("data.csv", "prediction")
+            >>> if cache:
+            >>>     print(f"CSV路径: {cache['path']}")
+        
+        注意事项：
+            1. 自动检查文件存在状态
+            2. 返回完整的缓存信息
+            3. 如果缓存不存在返回None
+        """
+        cache_key = self.get_cache_key(data_file_path)
+        if not cache_key or cache_key not in self.cache_data:
+            return None
+        
+        cache_info = self.cache_data[cache_key]
+        if 'csv_files' not in cache_info or csv_type not in cache_info['csv_files']:
+            return None
+        
+        csv_cache = cache_info['csv_files'][csv_type]
+        
+        # 检查文件是否存在并更新状态
+        csv_path = Path(csv_cache['path'])
+        exists = csv_path.exists()
+        if csv_cache['exists'] != exists:
+            csv_cache['exists'] = exists
+            self._save_cache()
+        
+        return csv_cache
+    
+    def get_all_csv_cache(self, data_file_path):
+        """
+        获取所有CSV文件缓存
+        
+        获取指定数据文件的所有CSV缓存信息。
+        
+        参数：
+            data_file_path: str 或 Path
+                数据文件路径
+        
+        返回：
+            dict: 所有CSV缓存信息
+                键为CSV类型，值为缓存信息
+        
+        示例：
+            >>> all_csv = self.get_all_csv_cache("data.csv")
+            >>> for csv_type, info in all_csv.items():
+            >>>     print(f"{csv_type}: {info['path']}")
+        
+        注意事项：
+            1. 返回所有CSV类型的缓存
+            2. 自动更新文件存在状态
+            3. 如果没有缓存返回空字典
+        """
+        cache_key = self.get_cache_key(data_file_path)
+        if not cache_key or cache_key not in self.cache_data:
+            return {}
+        
+        cache_info = self.cache_data[cache_key]
+        if 'csv_files' not in cache_info:
+            return {}
+        
+        # 更新所有CSV文件的存在状态
+        for csv_type, csv_cache in cache_info['csv_files'].items():
+            csv_path = Path(csv_cache['path'])
+            exists = csv_path.exists()
+            if csv_cache['exists'] != exists:
+                csv_cache['exists'] = exists
+        
+        # 如果有状态变化，保存缓存
+        if any(csv_cache['exists'] != Path(csv_cache['path']).exists() 
+               for csv_cache in cache_info['csv_files'].values()):
+            self._save_cache()
+        
+        return cache_info['csv_files']
     
     def clear_cache(self, data_file_path=None):
         """
@@ -511,6 +653,13 @@ class CacheManager:
                         if isinstance(img_info, dict):
                             print(f"  - {img_type}: {img_info.get('path', 'Unknown')}")
                 
+                # 检查是否有CSV缓存
+                if 'csv_files' in info and info['csv_files']:
+                    print("CSV缓存:")
+                    for csv_type, csv_info in info['csv_files'].items():
+                        if isinstance(csv_info, dict):
+                            print(f"  - {csv_type}: {csv_info.get('path', 'Unknown')}")
+                
                 print("-" * 40)
             else:
                 # 只包含图片缓存的记录
@@ -520,6 +669,15 @@ class CacheManager:
                     for img_type, img_info in info['images'].items():
                         if isinstance(img_info, dict):
                             print(f"  - {img_type}: {img_info.get('path', 'Unknown')}")
+                    print("-" * 40)
+                
+                # 只包含CSV缓存的记录
+                if 'csv_files' in info and info['csv_files']:
+                    print(f"文件: {info.get('data_file', 'Unknown')}")
+                    print("CSV缓存:")
+                    for csv_type, csv_info in info['csv_files'].items():
+                        if isinstance(csv_info, dict):
+                            print(f"  - {csv_type}: {csv_info.get('path', 'Unknown')}")
                     print("-" * 40)
     
     def is_cache_valid(self, data_file_path):
